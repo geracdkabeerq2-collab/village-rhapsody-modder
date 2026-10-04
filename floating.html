@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>修改器悬浮窗</title>
+<style>
+:root {
+  --bg: rgba(28, 24, 20, 0.92);
+  --panel: rgba(46, 40, 33, 0.95);
+  --ink: #e8dfd0;
+  --sub: #a89a86;
+  --line: rgba(255,255,255,0.08);
+  --accent: #d9a441;
+  --green: #6db874;
+  --red: #e06a5a;
+  --blue: #6a9bd9;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+html, body { background: #1c1814; }
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  color: var(--ink);
+  width: 100%; height: 100vh;
+  overflow: hidden;
+}
+#root {
+  background: var(--bg);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column;
+  height: 100vh; overflow: hidden;
+}
+/* 标题栏（拖拽区） */
+.titlebar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: move;
+  background: linear-gradient(135deg, #3d3428, #4a3d2e);
+  border-radius: 12px 12px 0 0;
+  -webkit-app-region: drag;
+}
+.titlebar .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.titlebar .dot.r { background: #e06a5a; }
+.titlebar .dot.y { background: #d9a441; }
+.titlebar .dot.g { background: #6db874; }
+.titlebar .title { font-size: 13px; font-weight: 600; letter-spacing: 1px; }
+.titlebar .spacer { flex: 1; }
+.titlebar button {
+  -webkit-app-region: no-drag; background: none; border: none; color: var(--sub);
+  cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px;
+}
+.titlebar button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* 内容区 */
+.content { flex: 1; overflow-y: auto; padding: 8px; }
+.content::-webkit-scrollbar { width: 5px; }
+.content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+/* 折叠面板 */
+.panel { margin-bottom: 6px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.panel-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; cursor: pointer; background: var(--panel);
+  font-size: 13px; font-weight: 600;
+}
+.panel-head .icon { font-size: 15px; }
+.panel-head .arrow { margin-left: auto; transition: .2s; color: var(--sub); }
+.panel.open .panel-head .arrow { transform: rotate(90deg); }
+.panel-body { display: none; padding: 10px 12px; background: rgba(0,0,0,0.2); }
+.panel.open .panel-body { display: block; }
+
+/* 快捷按钮 */
+.quick-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn {
+  padding: 7px 12px; border: none; border-radius: 6px; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: #fff; transition: .12s;
+  letter-spacing: .5px;
+}
+.btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-green { background: var(--green); }
+.btn-red { background: var(--red); }
+.btn-accent { background: var(--accent); color: #2b241a; }
+.btn-blue { background: var(--blue); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+/* 道具列表 */
+.prop-row {
+  display: flex; align-items: center; gap: 8px; padding: 4px 0;
+  font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.prop-row .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prop-row input {
+  width: 62px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px;
+  background: rgba(255,255,255,0.06); color: var(--ink); font-size: 12px; text-align: center;
+}
+.prop-row .ok { color: var(--green); cursor: pointer; font-size: 13px; padding: 2px 4px; }
+.prop-row .ok:hover { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+/* 自定义道具修改 */
+.custom-prop { padding: 6px; border: 1px dashed rgba(217,164,65,0.4); border-radius: 8px; background: rgba(217,164,65,0.06); }
+.custom-prop-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.custom-prop-row:last-child { margin-bottom: 0; }
+.prop-select {
+  flex: 1; padding: 6px 8px; border: 1px solid rgba(217,164,65,0.4); border-radius: 6px;
+  background: rgba(255,255,255,0.06); color: var(--ink); font-size: 12px;
+}
+.custom-prop-row input {
+  flex: 1; padding: 6px 8px; border: 1px solid rgba(217,164,65,0.4); border-radius: 6px;
+  background: rgba(255,255,255,0.06); color: var(--ink); font-size: 13px; text-align: center;
+}
+.custom-prop-row input:focus { border-color: #d9a441; outline: none; }
+
+/* NPC */
+.npc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.npc-row { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 4px; }
+.npc-row .nname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.npc-row .star { color: #555; cursor: pointer; font-size: 12px; }
+.npc-row .star.on { color: #f5b731; }
+
+/* CG */
+.cg-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.cg-item {
+  font-size: 11px; padding: 5px 2px; text-align: center; border-radius: 5px;
+  border: 1px solid var(--line); cursor: pointer;
+}
+.cg-item.unlocked { border-color: var(--green); color: var(--green); background: rgba(109,184,116,0.12); }
+.cg-item.locked { color: var(--sub); }
+
+/* 游戏运行状态提示 */
+.game-status {
+  padding: 7px 12px; font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.game-status.running { background: rgba(224,106,90,0.18); color: #ff8a7a; }
+.game-status.stopped { background: rgba(109,184,116,0.15); color: #8fd697; }
+.game-status .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.game-status.running .dot { background: #e06a5a; box-shadow: 0 0 6px #e06a5a; animation: pulse 1s infinite; }
+.game-status.stopped .dot { background: #6db874; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* 存档选择器 */
+.save-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: rgba(0,0,0,0.3);
+  border-bottom: 1px solid var(--line); font-size: 12px;
+}
+.save-bar label { color: var(--sub); flex-shrink: 0; }
+.save-bar select {
+  flex: 1; padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px;
+  background: rgba(255,255,255,0.06); color: var(--ink); font-size: 12px;
+}
+.save-bar .cur-nick { color: var(--accent); font-weight: 600; flex-shrink: 0; }
+
+/* 体力 */
+.phy-row { display: flex; align-items: center; gap: 10px; }
+.phy-bar { flex: 1; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; }
+.phy-fill { height: 100%; background: linear-gradient(90deg, #d9a441, #e0c06a); border-radius: 5px; transition: .3s; }
+.phy-num { font-size: 13px; font-weight: 700; color: var(--accent); min-width: 40px; text-align: right; }
+
+/* 状态提示 */
+.toast {
+  position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+  padding: 8px 16px; border-radius: 6px; font-size: 12px; color: #fff;
+  background: var(--green); opacity: 0; transition: .25s; pointer-events: none;
+  z-index: 999; white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+.toast.err { background: var(--red); }
+
+.hint { font-size: 11px; color: #7a6f5e; line-height: 1.5; margin-top: 6px; }
+
+/* 金钱 */
+.money-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.money-num {
+  font-size: 20px; font-weight: 700; color: #f5c542; flex: 1;
+  letter-spacing: .5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.money-input-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.money-input-row input {
+  flex: 1; padding: 6px 8px; border: 1px solid rgba(245,197,66,0.4); border-radius: 6px;
+  background: rgba(255,255,255,0.06); color: var(--ink); font-size: 13px; text-align: center;
+}
+.money-input-row input:focus { border-color: #f5c542; outline: none; }
+.money-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn-gold { background: #f5c542; color: #3a2f14; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="titlebar" id="titlebar">
+    <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+    <span class="title">🌾 狂想曲修改器</span>
+    <span class="spacer"></span>
+    <button id="btnMin" title="最小化">—</button>
+    <button id="btnClose" title="退出">✕</button>
+  </div>
+
+  <div class="game-status stopped" id="gameStatus">
+    <span class="dot"></span><span id="gameStatusText">检测中…</span>
+  </div>
+
+  <div class="save-bar">
+    <label>存档</label>
+    <select id="saveSelect" onchange="switchSave(this.value)"></select>
+    <span class="cur-nick" id="curNick"></span>
+  </div>
+
+  <div class="content" id="content">
+    <!-- 体力 -->
+    <div class="panel open" id="panelPhy">
+      <div class="panel-head" onclick="toggle('panelPhy')">
+        <span class="icon">⚡</span> 体力
+        <span class="arrow">▶</span>
+      </div>
+      <div class="panel-body">
+        <div class="phy-row">
+          <div class="phy-bar"><div class="phy-fill" id="phyFill" style="width:100%"></div></div>
+          <span class="phy-num" id="phyNum">--</span>
+        </div>
+        <div class="quick-row" style="margin-top:8px">
+          <button class="btn btn-red btn-sm" onclick="fillPhysical()">🔋 补满</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 金钱 -->
+    <div class="panel open" id="panelMoney">
+      <div class="panel-head" onclick="toggle('panelMoney')">
+        <span class="icon">💰</span> 金钱
+        <span class="arrow">▶</span>
+      </div>
+      <div class="panel-body">
+        <div class="money-row">
+          <span class="money-num" id="moneyNum">--</span>
+        </div>
+        <div class="money-input-row">
+          <input type="number" id="moneyInput" min="0" placeholder="输入金额（支持到亿）">
+          <button class="btn btn-gold btn-sm" onclick="setMoney()">设定</button>
+        </div>
+        <div class="money-btns">
+          <button class="btn btn-green btn-sm" onclick="addMoney(10000)">+1万</button>
+          <button class="btn btn-green btn-sm" onclick="addMoney(100000)">+10万</button>
+          <button class="btn btn-green btn-sm" onclick="addMoney(1000000)">+100万</button>
+          <button class="btn btn-blue btn-sm" onclick="addMoney(10000000)">+1000万</button>
+          <button class="btn btn-accent btn-sm" onclick="addMoney(100000000)">+1亿</button>
+        </div>
+        <div class="hint">金币在游戏里显示为「金币」道具。输入任意金额点「设定」直接改。</div>
+      </div>
+    </div>
+
+    <!-- 快捷操作 -->
+    <div class="panel open" id="panelQuick">
+      <div class="panel-head" onclick="toggle('panelQuick')">
+        <span class="icon">🚀</span> 快捷操作
+        <span class="arrow">▶</span>
+      </div>
+      <div class="panel-body">
+        <div class="quick-row">
+          <button class="btn btn-green btn-sm" onclick="quickAll()">全部道具 999</button>
+          <button class="btn btn-accent btn-sm" onclick="quickNpc()">满好感</button>
+          <button class="btn btn-blue btn-sm" onclick="quickCg()">全 CG</button>
+          <button class="btn btn-red btn-sm" onclick="fillPhysical()">补体力</button>
+        </div>
+        <div class="hint">修改后请在游戏里「读档」立即生效（游戏会缓存内存数据）。</div>
+        <div class="hint" style="color:#e06a5a">⚠️ 若读档仍不生效，请先退出游戏→修改→再进游戏。</div>
+      </div>
+    </div>
+
+    <!-- 道具 -->
+    <div class="panel" id="panelProp">
+      <div class="panel-head" onclick="toggle('panelProp')">
+        <span class="icon">🎒</span> 道具数量
+        <span class="arrow">▶</span>
+      </div>
+      <div class="panel-body">
+        <!-- 自定义修改：选道具 + 输数量 -->
+        <div class="custom-prop">
+          <div class="custom-prop-row">
+            <select id="propSelect" class="prop-select"></select>
+          </div>
+          <div class="custom-prop-row">
+            <input type="number" id="propNumInput" min="0" placeholder="数量">
+            <button class="btn btn-accent btn-sm" onclick="setCustomProp()">设定</button>
+          </div>
+          <div class="hint">上方可从全部 140 种道具里任选，输入数量点「设定」直接改（无此道具会自动添加）。</div>
+        </div>
+        <div class="quick-row" style="margin:8px 0 6px">
+          <button class="btn btn-green btn-sm" onclick="quickAll()">全部已有道具设为</button>
+          <input type="number" id="allNum" value="999" style="width:60px;padding:4px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:4px;color:var(--ink);font-size:12px">
+        </div>
+        <div class="hint" style="margin-bottom:6px">下方是当前背包里已有的道具，点每行输入框改数量后按 ✓ 保存。</div>
+        <div id="propList"></div>
+      </div>
+    </div>
+
+    <!-- NPC -->
+    <div class="panel" id="panelNpc">
+      <div class="panel-head" onclick="toggle('panelNpc')">
+        <span class="icon">💗</span> NPC 好感度
+        <span class="arrow">▶</span>
+      </div>
+      <div class="panel-body">
+        <div class="quick-row" style="margin-bottom:6px">
+          <button class="btn btn-green btn-sm" onclick="quickNpc()">全部满好感</button>
+        </div>
+        <div class="npc-grid" id="npcList"></div>
+      </div>
+    </div>
+
+    <!-- CG -->
+    <div class="panel" id="panelCg">
+      <div class="panel-head" onclick="toggle('panelCg')">
+        <span class="icon">🖼️</span> CG 画廊
+        <span class="arrow">▶</span>
+      </div>
+      <div class="panel-body">
+        <div class="quick-row" style="margin-bottom:6px">
+          <button class="btn btn-blue btn-sm" onclick="quickCg()">解锁全部</button>
+        </div>
+        <div class="cg-grid" id="cgList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+let META = null, CUR = null, SAVES = [];
+let CUR_FILE = null; // 当前选中的存档文件名
+let GAME_RUNNING = false; // 游戏是否在运行
+
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = 'toast', 2200);
+}
+
+function toggle(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+async function call(action, body) {
+  try {
+    if (CUR_FILE) body = Object.assign({}, body || {}, {file: CUR_FILE});
+    const r = await window.pywebview.api.do_action(action, body || {});
+    if (r.ok) { toast(r.msg || '成功'); await load(); }
+    else toast(r.error || '失败', true);
+  } catch (e) { toast('调用失败: ' + e, true); }
+}
+
+async function load() {
+  try {
+    const d = await window.pywebview.api.get_data();
+    META = d.meta; SAVES = d.saves || [];
+    CUR = d.cur;
+    GAME_RUNNING = d.game_running || false;
+    if (!CUR_FILE && CUR) CUR_FILE = CUR.file;
+    renderGameStatus();
+    renderSaveBar();
+    render();
+  } catch (e) { /* 后端未就绪 */ }
+}
+
+function renderGameStatus() {
+  const el = document.getElementById('gameStatus');
+  const txt = document.getElementById('gameStatusText');
+  if (GAME_RUNNING) {
+    el.className = 'game-status running';
+    txt.textContent = '游戏运行中 — 请先退出游戏再修改！';
+  } else {
+    el.className = 'game-status stopped';
+    txt.textContent = '游戏未运行 — 可以放心修改';
+  }
+}
+
+function renderSaveBar() {
+  const sel = document.getElementById('saveSelect');
+  const cur = sel.value;
+  sel.innerHTML = '';
+  SAVES.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.file;
+    opt.textContent = `${s.nickname} · 第${s.day}天 · 金币${s.money}`;
+    sel.appendChild(opt);
+  });
+  if (CUR_FILE) sel.value = CUR_FILE;
+  else if (SAVES.length) { CUR_FILE = SAVES[0].file; sel.value = CUR_FILE; }
+  // 当前昵称显示
+  const curSave = SAVES.find(s => s.file === CUR_FILE);
+  document.getElementById('curNick').textContent = curSave ? `👤 ${curSave.nickname}` : '';
+}
+
+async function switchSave(file) {
+  CUR_FILE = file;
+  try {
+    const r = await window.pywebview.api.get_save(file);
+    if (r.ok && r.cur) { CUR = r.cur; render(); toast('已切换到 ' + (r.cur.file)); }
+    else toast(r.error || '切换失败', true);
+  } catch (e) { toast('切换失败: ' + e, true); }
+}
+
+function render() {
+  if (!CUR || !META) return;
+  // 体力
+  const phy = CUR.physical || 0;
+  document.getElementById('phyNum').textContent = phy + '/100';
+  document.getElementById('phyFill').style.width = Math.min(100, phy) + '%';
+  // 金钱
+  renderMoney();
+  // 道具
+  renderProps();
+  // NPC
+  renderNpc();
+  // CG
+  renderCg();
+}
+
+function fmtMoney(n) {
+  n = Number(n) || 0;
+  if (n >= 100000000) return (n/100000000).toFixed(n%100000000===0?0:2) + ' 亿';
+  if (n >= 10000) return (n/10000).toFixed(n%10000===0?0:1) + ' 万';
+  return String(n);
+}
+
+function renderMoney() {
+  const m = CUR.money || 0;
+  document.getElementById('moneyNum').textContent = fmtMoney(m);
+  document.getElementById('moneyNum').title = '精确值：' + m;
+  if (!document.getElementById('moneyInput')._focused) {
+    document.getElementById('moneyInput').value = m;
+  }
+}
+
+function renderProps() {
+  const el = document.getElementById('propList');
+  const nameMap = {}; (META.props||[]).forEach(p => nameMap[p.id] = p.name);
+  el.innerHTML = '';
+  (CUR.props||[]).forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'prop-row';
+    row.innerHTML = `<span class="pname" title="#${p.id}">${nameMap[p.id]||('#'+p.id)}</span>
+      <input type="number" value="${p.num}" min="0" id="p_${p.id}">
+      <span class="ok" onclick="setProp(${p.id})">✓</span>`;
+    el.appendChild(row);
+  });
+  // 渲染自定义道具选择器（全部 140 种道具）
+  renderPropSelect();
+}
+
+function renderPropSelect() {
+  const sel = document.getElementById('propSelect');
+  if (!sel || sel._rendered) return;
+  sel.innerHTML = '';
+  (META.props||[]).forEach(p => {
+    if (p.id === 1) return; // 金币单独在「金钱」面板改，不列入道具选择器
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `#${p.id} ${p.name}`;
+    sel.appendChild(opt);
+  });
+  sel._rendered = true;
+}
+
+function renderNpc() {
+  const el = document.getElementById('npcList');
+  const nameMap = {}; (META.npc||[]).forEach(n => nameMap[n.id] = n.name);
+  el.innerHTML = '';
+  (CUR.npcs||[]).forEach(n => {
+    const star = n.starNum || 0;
+    let s = '';
+    for (let i=1;i<=5;i++) s += `<span class="star ${i<=star?'on':''}" onclick="setNpc(${n.npcId},${i})">★</span>`;
+    const row = document.createElement('div');
+    row.className = 'npc-row';
+    row.innerHTML = `<span class="nname" title="#${n.npcId}">${nameMap[n.npcId]||('#'+n.npcId)}</span><span>${s}</span>`;
+    el.appendChild(row);
+  });
+}
+
+function renderCg() {
+  const el = document.getElementById('cgList');
+  const unlocked = new Set(CUR.cg||[]);
+  el.innerHTML = '';
+  (META.cg||[]).forEach(c => {
+    const on = unlocked.has(c.key);
+    const d = document.createElement('div');
+    d.className = 'cg-item ' + (on?'unlocked':'locked');
+    d.textContent = c.name;
+    d.title = on?'已解锁':'未解锁';
+    el.appendChild(d);
+  });
+}
+
+// 动作
+function setProp(id) { call('set_prop', {id, num: parseInt(document.getElementById('p_'+id).value)||0}); }
+function setCustomProp() {
+  const id = parseInt(document.getElementById('propSelect').value);
+  const num = parseInt(document.getElementById('propNumInput').value);
+  if (isNaN(num) || num < 0) { toast('请输入有效数量', true); return; }
+  call('set_prop', {id, num});
+}
+function setNpc(id, star) { call('set_npc_star', {id, star}); }
+function quickAll() { call('set_all_props', {num: parseInt(document.getElementById('allNum').value)||999}); }
+function quickNpc() { call('set_all_npc_star', {star:5}); }
+function quickCg() { call('unlock_all_cg', {}); }
+function fillPhysical() { call('fill_physical', {}); }
+function setMoney() { call('set_money', {num: parseInt(document.getElementById('moneyInput').value)||0}); }
+function addMoney(delta) { call('add_money', {delta}); }
+
+// 标题栏按钮
+document.getElementById('btnMin').onclick = () => window.pywebview.api.minimize();
+document.getElementById('btnClose').onclick = () => window.pywebview.api.close();
+
+// 金钱输入框聚焦/失焦（输入时不被自动刷新覆盖）
+const moneyInput = document.getElementById('moneyInput');
+moneyInput.addEventListener('focus', () => moneyInput._focused = true);
+moneyInput.addEventListener('blur', () => { moneyInput._focused = false; renderMoney(); });
+moneyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') setMoney(); });
+
+load();
+setInterval(load, 3000); // 每3秒刷新一次
+</script>
+</body>
+</html>

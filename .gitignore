@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 存档备份（含个人游戏数据，切勿提交）
+data/
+_backup/
+*.qt
+*.bak
+
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
